@@ -1,0 +1,13 @@
+[[frontends.tcp]]
+name        = "Test Frontend"
+listenAddr  = "127.0.0.1:8080"
+target      = "WoL Forwarder"
+
+[[backends.echo]]
+name = "Echo Backend"
+
+[[backends.wolForwarder]]
+name             = "WoL Forwarder"
+targetAddr       = "192.168.178.3:22"
+wolMACAddr       = "2c:4d:54:d1:68:4d"
+wolBroadcastAddr = "192.168.178.255:9"
