@@ -15,7 +15,7 @@ type PipeHelper struct {
 }
 
 func NewPipeHelper(sourceConn net.Conn, targetConn net.Conn) *PipeHelper {
-	self := &PipeHelper{
+	pipeHelper := &PipeHelper{
 		isClosed:      false,
 		sourceConn:    sourceConn,
 		targetConn:    targetConn,
@@ -25,47 +25,47 @@ func NewPipeHelper(sourceConn net.Conn, targetConn net.Conn) *PipeHelper {
 	go func() {
 		_, err := io.Copy(sourceConn, targetConn)
 
-		if err != nil && !self.isClosed {
+		if err != nil && !pipeHelper.isClosed {
 			slog.Error("error while copying data", slog.Any("error", err))
 		}
 
-		self.Close()
+		pipeHelper.Close()
 	}()
 
 	go func() {
 		_, err := io.Copy(targetConn, sourceConn)
 
-		if err != nil && !self.isClosed {
+		if err != nil && !pipeHelper.isClosed {
 			slog.Error("error while copying data", slog.Any("error", err))
 		}
 
-		self.Close()
+		pipeHelper.Close()
 	}()
 
-	return self
+	return pipeHelper
 }
 
-func (self *PipeHelper) OnClose(closeCallback func()) error {
-	if self.closeCallback != nil {
+func (pipeHelper *PipeHelper) OnClose(closeCallback func()) error {
+	if pipeHelper.closeCallback != nil {
 		return fmt.Errorf("close callback already registered for pipehelper")
 	}
 
-	self.closeCallback = closeCallback
+	pipeHelper.closeCallback = closeCallback
 
 	return nil
 }
 
-func (self *PipeHelper) Close() {
-	if self.isClosed {
+func (pipeHelper *PipeHelper) Close() {
+	if pipeHelper.isClosed {
 		return
 	}
 
-	self.isClosed = true
+	pipeHelper.isClosed = true
 
-	self.sourceConn.Close()
-	self.targetConn.Close()
+	pipeHelper.sourceConn.Close()
+	pipeHelper.targetConn.Close()
 
-	if self.closeCallback != nil {
-		self.closeCallback()
+	if pipeHelper.closeCallback != nil {
+		pipeHelper.closeCallback()
 	}
 }

@@ -33,7 +33,7 @@ func NewTCPFrontend(conf config.TCPFrontendConfig) (*tcpFrontend, error) {
 		return nil, fmt.Errorf("can't listen on \"%s\" for frontend \"%s\": %q", conf.ListenAddr, conf.Name, err)
 	}
 
-	self := &tcpFrontend{
+	frontend := &tcpFrontend{
 		name:          conf.Name,
 		isClosed:      false,
 		listenAddr:    parsedListenAddr,
@@ -47,7 +47,7 @@ func NewTCPFrontend(conf config.TCPFrontendConfig) (*tcpFrontend, error) {
 
 			if err == nil {
 				go targetBackend.Handle(connection)
-			} else if !self.isClosed {
+			} else if !frontend.isClosed {
 				slog.Error("could not accept connection", slog.Any("error", err))
 			}
 		}
@@ -55,18 +55,18 @@ func NewTCPFrontend(conf config.TCPFrontendConfig) (*tcpFrontend, error) {
 
 	slog.Info("frontend started listening", slog.String("name", conf.Name), slog.String("listenAddr", conf.ListenAddr))
 
-	return self, nil
+	return frontend, nil
 }
 
-func (self *tcpFrontend) GetName() string {
-	return self.name
+func (frontend *tcpFrontend) GetName() string {
+	return frontend.name
 }
 
-func (self *tcpFrontend) Close() {
-	if self.isClosed {
+func (frontend *tcpFrontend) Close() {
+	if frontend.isClosed {
 		return
 	}
 
-	self.isClosed = true
-	self.listener.Close()
+	frontend.isClosed = true
+	frontend.listener.Close()
 }

@@ -14,6 +14,16 @@ clean:
 	@echo " > Cleaning build cache..."
 	@GOPATH=$(GOPATH) GOBIN=$(GOBIN) go clean
 
+## lint: Run the linter on the project
+lint:
+	@echo " > Running linter..."
+	@GOPATH=$(GOPATH) GOBIN=$(GOBIN) go vet ./...
+
+## test: Run all tests in the project
+test:
+	@echo " > Running tests..."
+	@GOPATH=$(GOPATH) GOBIN=$(GOBIN) go test ./...
+
 ## run: Run the project using the local config.toml
 run:
 	@echo " > Running code..."
