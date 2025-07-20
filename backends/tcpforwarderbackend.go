@@ -23,17 +23,17 @@ func NewTCPForwarderBackend(conf config.TCPForwarderBackendConfig) (*tcpForwarde
 	}, nil
 }
 
-func (self *tcpForwarderBackend) GetName() string {
-	return self.name
+func (backend *tcpForwarderBackend) GetName() string {
+	return backend.name
 }
 
-func (self *tcpForwarderBackend) Handle(connection net.Conn) {
-	connectionToTarget, err := net.Dial("tcp", self.targetAddr)
+func (backend *tcpForwarderBackend) Handle(connection net.Conn) {
+	connectionToTarget, err := net.Dial("tcp", backend.targetAddr)
 	if err != nil {
 		slog.Info(
 			"backend could not connect to target",
-			slog.String("targetAddr", self.targetAddr),
-			slog.String("name", self.name),
+			slog.String("targetAddr", backend.targetAddr),
+			slog.String("name", backend.name),
 			slog.Any("error", err),
 		)
 		return
@@ -41,9 +41,9 @@ func (self *tcpForwarderBackend) Handle(connection net.Conn) {
 
 	pipeHelper := utils.NewPipeHelper(connection, connectionToTarget)
 
-	listElement := self.activeConnections.PushBack(pipeHelper)
+	listElement := backend.activeConnections.PushBack(pipeHelper)
 
 	pipeHelper.OnClose(func() {
-		self.activeConnections.Remove(listElement)
+		backend.activeConnections.Remove(listElement)
 	})
 }

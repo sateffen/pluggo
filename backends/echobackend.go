@@ -20,16 +20,16 @@ func NewEchoBackend(conf config.EchoBackendConfig) (*echoBackend, error) {
 	}, nil
 }
 
-func (self *echoBackend) GetName() string {
-	return self.name
+func (backend *echoBackend) GetName() string {
+	return backend.name
 }
 
-func (self *echoBackend) Handle(connection net.Conn) {
+func (backend *echoBackend) Handle(connection net.Conn) {
 	pipeHelper := utils.NewPipeHelper(connection, connection)
 
-	listElement := self.activeConnections.PushBack(pipeHelper)
+	listElement := backend.activeConnections.PushBack(pipeHelper)
 
 	pipeHelper.OnClose(func() {
-		self.activeConnections.Remove(listElement)
+		backend.activeConnections.Remove(listElement)
 	})
 }

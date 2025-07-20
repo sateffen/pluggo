@@ -32,17 +32,17 @@ func NewWoLForwarderBackend(conf config.WoLForwarderBackendConfig) (*wolForwarde
 	}, nil
 }
 
-func (self *wolForwarderBackend) GetName() string {
-	return self.name
+func (backend *wolForwarderBackend) GetName() string {
+	return backend.name
 }
 
-func (self *wolForwarderBackend) Handle(connection net.Conn) {
-	connectionToTarget, err := self.tryDial()
+func (backend *wolForwarderBackend) Handle(connection net.Conn) {
+	connectionToTarget, err := backend.tryDial()
 	if err != nil {
 		slog.Info(
 			"backend could not connect to target",
-			slog.String("targetAddr", self.targetAddr),
-			slog.String("name", self.name),
+			slog.String("targetAddr", backend.targetAddr),
+			slog.String("name", backend.name),
 			slog.Any("error", err),
 		)
 		return
@@ -50,25 +50,25 @@ func (self *wolForwarderBackend) Handle(connection net.Conn) {
 
 	pipeHelper := utils.NewPipeHelper(connection, connectionToTarget)
 
-	listElement := self.activeConnections.PushBack(pipeHelper)
+	listElement := backend.activeConnections.PushBack(pipeHelper)
 
 	pipeHelper.OnClose(func() {
-		self.activeConnections.Remove(listElement)
+		backend.activeConnections.Remove(listElement)
 	})
 }
 
-func (self *wolForwarderBackend) tryDial() (net.Conn, error) {
+func (backend *wolForwarderBackend) tryDial() (net.Conn, error) {
 	timeoutTime := time.Now().Add(60 * time.Second)
 
 	for timeoutTime.After(time.Now()) {
-		if self.activeConnections.Len() == 0 {
-			err := self.wolHelper.SendWOLPaket()
+		if backend.activeConnections.Len() == 0 {
+			err := backend.wolHelper.SendWOLPaket()
 			if err != nil {
 				return nil, fmt.Errorf("could not send wol magic paket: %q", err)
 			}
 		}
 
-		targetConnection, err := net.Dial("tcp", self.targetAddr)
+		targetConnection, err := net.Dial("tcp", backend.targetAddr)
 		if err == nil {
 			return targetConnection, nil
 		}
@@ -76,5 +76,5 @@ func (self *wolForwarderBackend) tryDial() (net.Conn, error) {
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	return nil, fmt.Errorf("timeout while waiting for target with addr \"%s\"", self.targetAddr)
+	return nil, fmt.Errorf("timeout while waiting for target with addr \"%s\"", backend.targetAddr)
 }

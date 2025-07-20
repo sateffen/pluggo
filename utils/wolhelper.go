@@ -45,19 +45,19 @@ func NewWoLHelper(wolMACAddr string, wolBroadcastAddr string) (*WoLHelper, error
 	}, nil
 }
 
-func (self *WoLHelper) SendWOLPaket() error {
-	conn, err := net.DialUDP("udp", nil, self.wolBroadcastAddr)
+func (wolHelper *WoLHelper) SendWOLPaket() error {
+	conn, err := net.DialUDP("udp", nil, wolHelper.wolBroadcastAddr)
 	if err != nil {
 		return fmt.Errorf("failed to connect to broadcast addr: %w", err)
 	}
 	defer conn.Close()
 
-	_, err = conn.Write(self.magicPacket)
+	_, err = conn.Write(wolHelper.magicPacket)
 	if err != nil {
 		return fmt.Errorf("failed to send WOL paket to broadcast addr: %w", err)
 	}
 
-	slog.Debug("Sent WoL magic packet", slog.String("wolMACAddr", self.wolMACAddr.String()), slog.String("wolBroadcastAddr", self.wolBroadcastAddr.String()))
+	slog.Debug("Sent WoL magic packet", slog.String("wolMACAddr", wolHelper.wolMACAddr.String()), slog.String("wolBroadcastAddr", wolHelper.wolBroadcastAddr.String()))
 
 	return nil
 }
