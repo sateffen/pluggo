@@ -64,21 +64,22 @@ func (backend *wolForwarderBackend) Handle(connection net.Conn) {
 }
 
 func (backend *wolForwarderBackend) tryDial() (net.Conn, error) {
+	// First, try a quick connection to see if target is already awake
+	targetConnection, err := net.DialTimeout("tcp", backend.targetAddr, 2*time.Second)
+	if err == nil {
+		return targetConnection, nil
+	}
+
+	// Target is unreachable - send WoL packet and retry
+	err = backend.wolHelper.SendWOLPaket()
+	if err != nil {
+		return nil, fmt.Errorf("could not send wol magic paket: %q", err)
+	}
+
+	// Wait for target to wake up with longer timeout
 	timeoutTime := time.Now().Add(60 * time.Second)
-
-	for timeoutTime.After(time.Now()) {
-		backend.connectionsMutex.Lock()
-		hasActiveConnections := backend.activeConnections.Len() > 0
-		backend.connectionsMutex.Unlock()
-		
-		if !hasActiveConnections {
-			err := backend.wolHelper.SendWOLPaket()
-			if err != nil {
-				return nil, fmt.Errorf("could not send wol magic paket: %q", err)
-			}
-		}
-
-		targetConnection, err := net.Dial("tcp", backend.targetAddr)
+	for time.Now().Before(timeoutTime) {
+		targetConnection, err := net.DialTimeout("tcp", backend.targetAddr, 3*time.Second)
 		if err == nil {
 			return targetConnection, nil
 		}

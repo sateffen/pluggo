@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/sateffen/pluggo/config"
 	"github.com/sateffen/pluggo/utils"
@@ -30,7 +31,7 @@ func (backend *tcpForwarderBackend) GetName() string {
 }
 
 func (backend *tcpForwarderBackend) Handle(connection net.Conn) {
-	connectionToTarget, err := net.Dial("tcp", backend.targetAddr)
+	connectionToTarget, err := net.DialTimeout("tcp", backend.targetAddr, 10*time.Second)
 	if err != nil {
 		slog.Info(
 			"backend could not connect to target",
