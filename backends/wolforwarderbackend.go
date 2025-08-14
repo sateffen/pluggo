@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/sateffen/pluggo/config"
@@ -14,6 +15,7 @@ import (
 type wolForwarderBackend struct {
 	name              string
 	activeConnections *list.List
+	connectionsMutex  sync.Mutex
 	wolHelper         *utils.WoLHelper
 	targetAddr        string
 }
@@ -50,10 +52,14 @@ func (backend *wolForwarderBackend) Handle(connection net.Conn) {
 
 	pipeHelper := utils.NewPipeHelper(connection, connectionToTarget)
 
+	backend.connectionsMutex.Lock()
 	listElement := backend.activeConnections.PushBack(pipeHelper)
+	backend.connectionsMutex.Unlock()
 
 	pipeHelper.OnClose(func() {
+		backend.connectionsMutex.Lock()
 		backend.activeConnections.Remove(listElement)
+		backend.connectionsMutex.Unlock()
 	})
 }
 
@@ -61,7 +67,11 @@ func (backend *wolForwarderBackend) tryDial() (net.Conn, error) {
 	timeoutTime := time.Now().Add(60 * time.Second)
 
 	for timeoutTime.After(time.Now()) {
-		if backend.activeConnections.Len() == 0 {
+		backend.connectionsMutex.Lock()
+		hasActiveConnections := backend.activeConnections.Len() > 0
+		backend.connectionsMutex.Unlock()
+		
+		if !hasActiveConnections {
 			err := backend.wolHelper.SendWOLPaket()
 			if err != nil {
 				return nil, fmt.Errorf("could not send wol magic paket: %q", err)

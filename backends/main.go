@@ -33,13 +33,13 @@ func InitBackends(conf config.BackendConfigs) error {
 		backendList[tcpForwarderConf.Name] = newTCPForwarderBackend
 	}
 
-	for _, wolFordwarderConf := range conf.WoLForwarder {
-		newWoLForwarderBackend, err := NewWoLForwarderBackend(wolFordwarderConf)
+	for _, wolForwarderConf := range conf.WoLForwarder {
+		newWoLForwarderBackend, err := NewWoLForwarderBackend(wolForwarderConf)
 		if err != nil {
-			return fmt.Errorf("could not create backend \"%s\": %q", wolFordwarderConf.Name, err)
+			return fmt.Errorf("could not create backend \"%s\": %q", wolForwarderConf.Name, err)
 		}
 
-		backendList[wolFordwarderConf.Name] = newWoLForwarderBackend
+		backendList[wolForwarderConf.Name] = newWoLForwarderBackend
 	}
 
 	return nil

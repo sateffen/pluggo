@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"log/slog"
 	"net"
+	"sync"
 
 	"github.com/sateffen/pluggo/config"
 	"github.com/sateffen/pluggo/utils"
@@ -12,6 +13,7 @@ import (
 type tcpForwarderBackend struct {
 	name              string
 	activeConnections *list.List
+	connectionsMutex  sync.Mutex
 	targetAddr        string
 }
 
@@ -41,9 +43,13 @@ func (backend *tcpForwarderBackend) Handle(connection net.Conn) {
 
 	pipeHelper := utils.NewPipeHelper(connection, connectionToTarget)
 
+	backend.connectionsMutex.Lock()
 	listElement := backend.activeConnections.PushBack(pipeHelper)
+	backend.connectionsMutex.Unlock()
 
 	pipeHelper.OnClose(func() {
+		backend.connectionsMutex.Lock()
 		backend.activeConnections.Remove(listElement)
+		backend.connectionsMutex.Unlock()
 	})
 }

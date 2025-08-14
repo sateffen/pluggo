@@ -5,10 +5,12 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"sync"
 )
 
 type PipeHelper struct {
 	isClosed      bool
+	closeOnce     sync.Once
 	sourceConn    net.Conn
 	targetConn    net.Conn
 	closeCallback func()
@@ -26,7 +28,7 @@ func NewPipeHelper(sourceConn net.Conn, targetConn net.Conn) *PipeHelper {
 		_, err := io.Copy(sourceConn, targetConn)
 
 		if err != nil && !pipeHelper.isClosed {
-			slog.Error("error while copying data", slog.Any("error", err))
+			slog.Debug("connection closed during copy", slog.Any("error", err))
 		}
 
 		pipeHelper.Close()
@@ -36,7 +38,7 @@ func NewPipeHelper(sourceConn net.Conn, targetConn net.Conn) *PipeHelper {
 		_, err := io.Copy(targetConn, sourceConn)
 
 		if err != nil && !pipeHelper.isClosed {
-			slog.Error("error while copying data", slog.Any("error", err))
+			slog.Debug("connection closed during copy", slog.Any("error", err))
 		}
 
 		pipeHelper.Close()
@@ -56,16 +58,14 @@ func (pipeHelper *PipeHelper) OnClose(closeCallback func()) error {
 }
 
 func (pipeHelper *PipeHelper) Close() {
-	if pipeHelper.isClosed {
-		return
-	}
+	pipeHelper.closeOnce.Do(func() {
+		pipeHelper.isClosed = true
 
-	pipeHelper.isClosed = true
+		pipeHelper.sourceConn.Close()
+		pipeHelper.targetConn.Close()
 
-	pipeHelper.sourceConn.Close()
-	pipeHelper.targetConn.Close()
-
-	if pipeHelper.closeCallback != nil {
-		pipeHelper.closeCallback()
-	}
+		if pipeHelper.closeCallback != nil {
+			pipeHelper.closeCallback()
+		}
+	})
 }

@@ -45,11 +45,17 @@ func NewTCPFrontend(conf config.TCPFrontendConfig) (*tcpFrontend, error) {
 		for {
 			connection, err := listener.Accept()
 
-			if err == nil {
-				go targetBackend.Handle(connection)
-			} else if !frontend.isClosed {
+			if err != nil {
+				// Exit the loop if the listener is closed
+				if frontend.isClosed {
+					break
+				}
+
 				slog.Error("could not accept connection", slog.Any("error", err))
+				continue
 			}
+
+			targetBackend.Handle(connection)
 		}
 	}()
 

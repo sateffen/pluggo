@@ -3,4 +3,6 @@
 bin/
 vendor/
 
+pluggo
+
 !.gitignore
