@@ -17,10 +17,10 @@ You want to connect to a device in your network that is usually suspended. plugg
 
 ## Build it
 
-Simply use make:
+Simply use Go:
 
 ```sh
-make build
+go build -o pluggo *.go
 ```
 
 ## Configuration

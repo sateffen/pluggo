@@ -1,9 +1,7 @@
 .*
+!.gitignore
 
-bin/
 vendor/
 
 pluggo
 config.toml
-
-!.gitignore
