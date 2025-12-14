@@ -23,6 +23,12 @@ Simply use Go:
 go build -o pluggo *.go
 ```
 
+or if you want to have a small, stripped binary without any debug information:
+
+```sh
+go build -ldflags '-s' -o pluggo *.go
+```
+
 ## Configuration
 
 pluggo is configured using a `config.toml` file. You define one or more TCP frontends and backends. Each frontend listens for incoming connections and forwards them to a specified backend. Below is an example configuration, followed by an explanation of each field:
