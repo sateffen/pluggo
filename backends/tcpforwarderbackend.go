@@ -39,6 +39,7 @@ func (backend *tcpForwarderBackend) Handle(connection net.Conn) {
 			slog.String("name", backend.name),
 			slog.Any("error", err),
 		)
+		connection.Close()
 		return
 	}
 

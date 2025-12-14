@@ -47,6 +47,7 @@ func (backend *wolForwarderBackend) Handle(connection net.Conn) {
 			slog.String("name", backend.name),
 			slog.Any("error", err),
 		)
+		connection.Close()
 		return
 	}
 
@@ -71,20 +72,21 @@ func (backend *wolForwarderBackend) tryDial() (net.Conn, error) {
 	}
 
 	// Target is unreachable - send WoL packet and retry
+	slog.Debug("failed to connect to host, sending wol to wake it up", slog.String("targetAddr", backend.targetAddr))
 	err = backend.wolHelper.SendWOLPaket()
 	if err != nil {
 		return nil, fmt.Errorf("could not send wol magic paket: %q", err)
 	}
 
-	// Wait for target to wake up with longer timeout
-	timeoutTime := time.Now().Add(60 * time.Second)
-	for time.Now().Before(timeoutTime) {
-		targetConnection, err := net.DialTimeout("tcp", backend.targetAddr, 3*time.Second)
+	// Then we retry for something ~2min, else we give up.
+	for i := range 50 {
+		slog.Debug("trying to connect to host", slog.String("targetAddr", backend.targetAddr), slog.Int("retryCount", i))
+
+		time.Sleep(500 * time.Millisecond)
+		targetConnection, err = net.DialTimeout("tcp", backend.targetAddr, 2*time.Second)
 		if err == nil {
 			return targetConnection, nil
 		}
-
-		time.Sleep(500 * time.Millisecond)
 	}
 
 	return nil, fmt.Errorf("timeout while waiting for target with addr \"%s\"", backend.targetAddr)
