@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/sateffen/pluggo/backends"
@@ -12,8 +13,23 @@ import (
 	"github.com/sateffen/pluggo/frontends"
 )
 
+func getLogLevel() slog.Level {
+	switch strings.ToUpper(os.Getenv("LOG_LEVEL")) {
+	case "DEBUG":
+		return slog.LevelDebug
+	case "WARN":
+		return slog.LevelWarn
+	case "ERROR":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}
+
 func main() {
-	globalLogger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	globalLogger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: getLogLevel(),
+	}))
 	slog.SetDefault(globalLogger)
 
 	if len(os.Args) == 1 {
