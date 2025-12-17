@@ -17,16 +17,16 @@ You want to connect to a device in your network that is usually suspended. plugg
 
 ## Build it
 
-Simply use Go:
+Simply use make:
 
 ```sh
-go build -o pluggo *.go
+make build
 ```
 
-or if you want to have a small, stripped binary without any debug information:
+or if you want to build for arm64/aarch64 (like a raspberry pi):
 
 ```sh
-go build -ldflags '-s' -o pluggo *.go
+make build-arm64
 ```
 
 ## Configuration

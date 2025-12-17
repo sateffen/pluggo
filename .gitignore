@@ -2,7 +2,7 @@
 !.gitignore
 !.golangci.yml
 
+dist/
 vendor/
 
-pluggo
 config.toml
