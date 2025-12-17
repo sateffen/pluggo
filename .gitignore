@@ -1,5 +1,6 @@
 .*
 !.gitignore
+!.golangci.yml
 
 vendor/
 
