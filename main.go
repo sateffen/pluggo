@@ -51,17 +51,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = backends.InitBackends(conf.Backends)
+	backendList, err := backends.NewBackendList(conf.Backends)
 	if err != nil {
 		slog.Error("could not create backends", slog.Any("error", err))
 		os.Exit(1)
 	}
 
-	err = frontends.InitFrontends(conf.Frontends)
+	frontendList, err := frontends.NewFrontendList(conf.Frontends, backendList)
 	if err != nil {
 		slog.Error("could not create frontends", slog.Any("error", err))
 		os.Exit(1)
 	}
+
+	frontendList.ListenAll()
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
@@ -71,6 +73,6 @@ func main() {
 	<-signalChan
 
 	slog.Info("received exit signal, stopping...")
-	frontends.CloseFrontends()
+	frontendList.CloseAll()
 	os.Exit(0)
 }

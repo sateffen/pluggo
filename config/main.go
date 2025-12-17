@@ -13,7 +13,7 @@ type TCPFrontendConfig struct {
 }
 
 type FrontendConfigs struct {
-	Tcp []TCPFrontendConfig `toml:"tcp"`
+	TCP []TCPFrontendConfig `toml:"tcp"`
 }
 
 type EchoBackendConfig struct {
@@ -43,6 +43,8 @@ type Config struct {
 	Backends  BackendConfigs  `toml:"backends"`
 }
 
+// LoadConfig loads the file from given path and parses it as toml file, decoding it
+// to an usable Config.
 func LoadConfig(filePath string) (*Config, error) {
 	var conf Config
 

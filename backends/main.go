@@ -12,41 +12,40 @@ type Backend interface {
 	Handle(connection net.Conn)
 }
 
-var backendList = make(map[string]Backend)
+type BackendList struct {
+	list map[string]Backend
+}
 
-func InitBackends(conf config.BackendConfigs) error {
+// NewBackendList creates a new BackendList, filling it with backend instances based on provided BackendConfigs.
+func NewBackendList(conf config.BackendConfigs) (*BackendList, error) {
+	bl := BackendList{
+		list: make(map[string]Backend),
+	}
+
 	for _, echoConf := range conf.Echo {
-		newEchoBackend, err := NewEchoBackend(echoConf)
-		if err != nil {
-			return fmt.Errorf("could not create backend \"%s\": %q", echoConf.Name, err)
-		}
-
-		backendList[echoConf.Name] = newEchoBackend
+		bl.list[echoConf.Name] = newEchoBackend(echoConf)
 	}
 
 	for _, tcpForwarderConf := range conf.TCPForwarder {
-		newTCPForwarderBackend, err := NewTCPForwarderBackend(tcpForwarderConf)
-		if err != nil {
-			return fmt.Errorf("could not create backend \"%s\": %q", tcpForwarderConf.Name, err)
-		}
-
-		backendList[tcpForwarderConf.Name] = newTCPForwarderBackend
+		bl.list[tcpForwarderConf.Name] = newTCPForwarderBackend(tcpForwarderConf)
 	}
 
 	for _, wolForwarderConf := range conf.WoLForwarder {
-		newWoLForwarderBackend, err := NewWoLForwarderBackend(wolForwarderConf)
+		wolForwarderBackend, err := newWoLForwarderBackend(wolForwarderConf)
 		if err != nil {
-			return fmt.Errorf("could not create backend \"%s\": %q", wolForwarderConf.Name, err)
+			return nil, fmt.Errorf("could not create backend \"%s\": %w", wolForwarderConf.Name, err)
 		}
 
-		backendList[wolForwarderConf.Name] = newWoLForwarderBackend
+		bl.list[wolForwarderConf.Name] = wolForwarderBackend
 	}
 
-	return nil
+	return &bl, nil
 }
 
-func GetBackend(name string) (Backend, bool) {
-	backend, ok := backendList[name]
+// Get returns the backend with given name if present. The second return value indicates whether
+// the value is present, like in a casual map.
+func (bl *BackendList) Get(name string) (Backend, bool) {
+	backend, ok := bl.list[name]
 
 	return backend, ok
 }

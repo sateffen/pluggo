@@ -8,86 +8,111 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sateffen/pluggo/backends/helper"
 	"github.com/sateffen/pluggo/config"
-	"github.com/sateffen/pluggo/utils"
 )
+
+const wolDialTimeout = 2 * time.Second
+const wolTimeAfterMagicPacket = 5 * time.Second
+const wolMaxDialRetryCount = 50
+const wolTimeBetweenRetries = 500 * time.Millisecond
 
 type wolForwarderBackend struct {
 	name              string
 	activeConnections *list.List
 	connectionsMutex  sync.Mutex
-	wolHelper         *utils.WoLHelper
+	wolSender         helper.WoLSender
 	targetAddr        string
+	dialer            dialer
+	sleeper           sleeper
 }
 
-func NewWoLForwarderBackend(conf config.WoLForwarderBackendConfig) (*wolForwarderBackend, error) {
-	wolHelper, err := utils.NewWoLHelper(conf.WoLMACAddr, conf.WoLBroadcastAddr)
+// newWoLForwarderBackend creates a new instance of wolForwarderBackend, preparing it with all necessary dependencies.
+func newWoLForwarderBackend(conf config.WoLForwarderBackendConfig) (*wolForwarderBackend, error) {
+	wolHelper, err := helper.NewWoLHelper(conf.WoLMACAddr, conf.WoLBroadcastAddr)
 	if err != nil {
-		return nil, fmt.Errorf("could not create WoL helper: %q", err)
+		return nil, fmt.Errorf("could not create WoL helper: %w", err)
 	}
 
 	return &wolForwarderBackend{
 		name:              conf.Name,
 		activeConnections: list.New(),
-		wolHelper:         wolHelper,
+		wolSender:         wolHelper,
 		targetAddr:        conf.TargetAddr,
+		dialer:            defaultDialer{},
+		sleeper:           defaultSleeper{},
 	}, nil
 }
 
-func (backend *wolForwarderBackend) GetName() string {
-	return backend.name
+// GetName returns the name of the current wolForwarderBackend instance.
+func (be *wolForwarderBackend) GetName() string {
+	return be.name
 }
 
-func (backend *wolForwarderBackend) Handle(connection net.Conn) {
-	connectionToTarget, err := backend.tryDial()
+// Handle handles given connection by trying to dial the target host. If the target host is reachable,
+// a pipe will get generated, else the connection gets closed.
+// Handle takes ownership of given connection.
+func (be *wolForwarderBackend) Handle(connection net.Conn) {
+	connectionToTarget, err := be.tryDial()
 	if err != nil {
 		slog.Info(
 			"backend could not connect to target",
-			slog.String("targetAddr", backend.targetAddr),
-			slog.String("name", backend.name),
+			slog.String("targetAddr", be.targetAddr),
+			slog.String("name", be.name),
 			slog.Any("error", err),
 		)
-		connection.Close()
+
+		if err = connection.Close(); err != nil {
+			slog.Warn("could not properly close incoming connection after dialer timeout", slog.Any("error", err))
+		}
+
 		return
 	}
 
-	pipeHelper := utils.NewPipeHelper(connection, connectionToTarget)
+	pipeHelper := helper.NewPipeHelper(connection, connectionToTarget)
 
-	backend.connectionsMutex.Lock()
-	listElement := backend.activeConnections.PushBack(pipeHelper)
-	backend.connectionsMutex.Unlock()
+	be.connectionsMutex.Lock()
+	listElement := be.activeConnections.PushBack(pipeHelper)
+	be.connectionsMutex.Unlock()
 
+	//nolint:gosec // if an error happens here, the matrix is broken
 	pipeHelper.OnClose(func() {
-		backend.connectionsMutex.Lock()
-		backend.activeConnections.Remove(listElement)
-		backend.connectionsMutex.Unlock()
+		be.connectionsMutex.Lock()
+		be.activeConnections.Remove(listElement)
+		be.connectionsMutex.Unlock()
 	})
 }
 
-func (backend *wolForwarderBackend) tryDial() (net.Conn, error) {
+// tryDial tries to dial the target host. If successful, the generated connection gets returned. Otherwise
+// a wake-on-lan magic-packet is sent and we try to connect to the target host for some time. If a connection
+// is establised, we return it, else we return an error.
+func (be *wolForwarderBackend) tryDial() (net.Conn, error) {
 	// First, try a quick connection to see if target is already awake
-	targetConnection, err := net.DialTimeout("tcp", backend.targetAddr, 2*time.Second)
+	targetConnection, err := be.dialer.DialTimeout("tcp", be.targetAddr, wolDialTimeout)
 	if err == nil {
 		return targetConnection, nil
 	}
 
 	// Target is unreachable - send WoL packet and retry
-	slog.Debug("failed to connect to host, sending wol to wake it up", slog.String("targetAddr", backend.targetAddr))
-	err = backend.wolHelper.SendWOLPaket()
+	slog.Debug("failed to connect to host, sending wol to wake it up", slog.String("targetAddr", be.targetAddr))
+	err = be.wolSender.SendWoLPacket()
 	if err != nil {
-		return nil, fmt.Errorf("could not send wol magic paket: %q", err)
+		return nil, fmt.Errorf("could not send wol magic paket: %w", err)
 	}
 
-	// Then we retry for something ~2min, else we give up.
-	for i := range 50 {
-		slog.Debug("trying to connect to host", slog.String("targetAddr", backend.targetAddr), slog.Int("retryCount", i))
+	// Let's give the target system some time to come up, before we try to dial
+	be.sleeper.Sleep(wolTimeAfterMagicPacket)
 
-		time.Sleep(500 * time.Millisecond)
-		targetConnection, err = net.DialTimeout("tcp", backend.targetAddr, 2*time.Second)
+	// Then we retry for something ~2min, else we give up.
+	for i := range wolMaxDialRetryCount {
+		slog.Debug("trying to connect to host", slog.String("targetAddr", be.targetAddr), slog.Int("retryCount", i))
+
+		be.sleeper.Sleep(wolTimeBetweenRetries)
+		targetConnection, err = be.dialer.DialTimeout("tcp", be.targetAddr, wolDialTimeout)
 		if err == nil {
 			return targetConnection, nil
 		}
 	}
 
-	return nil, fmt.Errorf("timeout while waiting for target with addr \"%s\"", backend.targetAddr)
+	return nil, fmt.Errorf("timeout while waiting for target with addr \"%s\"", be.targetAddr)
 }

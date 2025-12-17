@@ -2,40 +2,69 @@ package frontends
 
 import (
 	"fmt"
+	"log/slog"
 
+	"github.com/sateffen/pluggo/backends"
 	"github.com/sateffen/pluggo/config"
 )
 
 type Frontend interface {
 	GetName() string
-	Close()
+	Listen() error
+	Close() error
 }
 
-var frontendList = make(map[string]Frontend)
+type FrontendList struct {
+	list map[string]Frontend
+}
 
-func InitFrontends(conf config.FrontendConfigs) error {
-	for _, tcpConf := range conf.Tcp {
-		newTCPFrontend, err := NewTCPFrontend(tcpConf)
+// NewFrontendList creates a new instance of FrontendList, filling it frontend instances based on given configs.
+func NewFrontendList(conf config.FrontendConfigs, backendList *backends.BackendList) (*FrontendList, error) {
+	fl := FrontendList{
+		list: make(map[string]Frontend),
+	}
+
+	for _, tcpConf := range conf.TCP {
+		tcpFrontend, err := newTCPFrontend(tcpConf, backendList)
 		if err != nil {
-			return fmt.Errorf("could not create frontend \"%s\": %q", tcpConf.Name, err)
+			fl.CloseAll()
+			return nil, fmt.Errorf("could not create frontend \"%s\": %w", tcpConf.Name, err)
 		}
 
-		frontendList[tcpConf.Name] = newTCPFrontend
+		fl.list[tcpConf.Name] = tcpFrontend
 	}
 
-	return nil
+	return &fl, nil
 }
 
-func GetFrontend(name string) (Frontend, bool) {
-	backend, ok := frontendList[name]
+// Get returns the backend with given name if present. The second return value indicates whether
+// the value is present, like in a casual map.
+func (fl *FrontendList) Get(name string) (Frontend, bool) {
+	frontend, ok := fl.list[name]
 
-	return backend, ok
+	return frontend, ok
 }
 
-func CloseFrontends() {
-	for _, frontend := range frontendList {
-		frontend.Close()
+// ListenAll starts the listener for all Frontends. Each listen starts in its own go-routine.
+// If any listen fails, this will close all frontends.
+func (fl *FrontendList) ListenAll() {
+	for _, frontend := range fl.list {
+		go func(fe Frontend) {
+			err := fe.Listen()
+
+			if err != nil {
+				slog.Warn("tcpfrontend failed to listen", slog.String("name", fe.GetName()), slog.Any("error", err))
+				fl.CloseAll()
+			}
+		}(frontend)
 	}
+}
 
-	frontendList = make(map[string]Frontend)
+// CloseAll closes all listening frontends and therefore stops all listening frontends.
+func (fl *FrontendList) CloseAll() {
+	for _, frontend := range fl.list {
+		if err := frontend.Close(); err != nil {
+			slog.Warn("couldn't close frontend properly", slog.String("name", frontend.GetName()), slog.Any("error", err))
+		}
+	}
 }

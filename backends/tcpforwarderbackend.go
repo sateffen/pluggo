@@ -7,51 +7,65 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sateffen/pluggo/backends/helper"
 	"github.com/sateffen/pluggo/config"
-	"github.com/sateffen/pluggo/utils"
 )
+
+const tcpDialTimeout = 10 * time.Second
 
 type tcpForwarderBackend struct {
 	name              string
 	activeConnections *list.List
 	connectionsMutex  sync.Mutex
 	targetAddr        string
+	dialer            dialer
 }
 
-func NewTCPForwarderBackend(conf config.TCPForwarderBackendConfig) (*tcpForwarderBackend, error) {
+// newTCPForwarderBackend creates a new instance of tcpForwarderBackend, preparing it with all necessary dependencies.
+func newTCPForwarderBackend(conf config.TCPForwarderBackendConfig) *tcpForwarderBackend {
 	return &tcpForwarderBackend{
 		name:              conf.Name,
 		activeConnections: list.New(),
 		targetAddr:        conf.TargetAddr,
-	}, nil
+		dialer:            defaultDialer{},
+	}
 }
 
-func (backend *tcpForwarderBackend) GetName() string {
-	return backend.name
+// GetName returns the name of the current tcpForwarderBackend instance.
+func (be *tcpForwarderBackend) GetName() string {
+	return be.name
 }
 
-func (backend *tcpForwarderBackend) Handle(connection net.Conn) {
-	connectionToTarget, err := net.DialTimeout("tcp", backend.targetAddr, 10*time.Second)
+// Handle handles given connection by trying to dial the target host. If the target host is reachable,
+// a pipe will get generated, else the connection gets closed.
+// Handle takes ownership of given connection.
+func (be *tcpForwarderBackend) Handle(connection net.Conn) {
+	connectionToTarget, err := be.dialer.DialTimeout("tcp", be.targetAddr, tcpDialTimeout)
 	if err != nil {
 		slog.Info(
 			"backend could not connect to target",
-			slog.String("targetAddr", backend.targetAddr),
-			slog.String("name", backend.name),
+			slog.String("targetAddr", be.targetAddr),
+			slog.String("name", be.name),
 			slog.Any("error", err),
 		)
-		connection.Close()
+
+		if err = connection.Close(); err != nil {
+			slog.Warn("could not properly close incoming connection after dialer timeout", slog.Any("error", err))
+		}
+
 		return
 	}
 
-	pipeHelper := utils.NewPipeHelper(connection, connectionToTarget)
+	pipeHelper := helper.NewPipeHelper(connection, connectionToTarget)
 
-	backend.connectionsMutex.Lock()
-	listElement := backend.activeConnections.PushBack(pipeHelper)
-	backend.connectionsMutex.Unlock()
+	be.connectionsMutex.Lock()
+	listElement := be.activeConnections.PushBack(pipeHelper)
+	be.connectionsMutex.Unlock()
 
+	//nolint:gosec // if an error happens here, the matrix is broken
 	pipeHelper.OnClose(func() {
-		backend.connectionsMutex.Lock()
-		backend.activeConnections.Remove(listElement)
-		backend.connectionsMutex.Unlock()
+		be.connectionsMutex.Lock()
+		be.activeConnections.Remove(listElement)
+		be.connectionsMutex.Unlock()
 	})
 }

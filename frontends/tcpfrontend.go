@@ -4,75 +4,101 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"sync"
 
 	"github.com/sateffen/pluggo/backends"
 	"github.com/sateffen/pluggo/config"
 )
 
 type tcpFrontend struct {
-	name          string
-	isClosed      bool
-	listenAddr    *net.TCPAddr
-	listener      *net.TCPListener
-	targetBackend backends.Backend
+	name            string
+	targetBackend   backends.Backend
+	listenerMutex   sync.RWMutex
+	listenAddr      *net.TCPAddr
+	listener        tcpListener
+	listenerFactory tcpListenerFactory
 }
 
-func NewTCPFrontend(conf config.TCPFrontendConfig) (*tcpFrontend, error) {
+// newTCPFrontend creates a new instance of an tcpFrontend, preparing it with all default dependencies.
+func newTCPFrontend(conf config.TCPFrontendConfig, backendList *backends.BackendList) (*tcpFrontend, error) {
 	parsedListenAddr, err := net.ResolveTCPAddr("tcp", conf.ListenAddr)
 	if err != nil {
-		return nil, fmt.Errorf("could not parse listenAddr \"%s\" of frontend \"%s\": %q", conf.ListenAddr, conf.Name, err)
+		return nil, fmt.Errorf("could not parse listenAddr \"%s\" of frontend \"%s\": %w", conf.ListenAddr, conf.Name, err)
 	}
 
-	targetBackend, ok := backends.GetBackend(conf.Target)
+	targetBackend, ok := backendList.Get(conf.Target)
 	if !ok {
 		return nil, fmt.Errorf("target backend \"%s\" for frontend \"%s\" does not exist", conf.Target, conf.Name)
 	}
 
-	listener, err := net.ListenTCP("tcp", parsedListenAddr)
+	return &tcpFrontend{
+		name:            conf.Name,
+		targetBackend:   targetBackend,
+		listenerMutex:   sync.RWMutex{},
+		listenAddr:      parsedListenAddr,
+		listener:        nil,
+		listenerFactory: defaultTCPListenerFactory{},
+	}, nil
+}
+
+// GetName returns the name of the current wolForwarderBackend instance.
+func (fe *tcpFrontend) GetName() string {
+	return fe.name
+}
+
+// Listen creates a TCP listener, starts listening and accepting connections.
+// Listen blocks the current thread by starting an endless loop accepting new connections.
+// Listen is resilient in that it does not stop accepting connections just because an error happens.
+func (fe *tcpFrontend) Listen() error {
+	fe.listenerMutex.Lock()
+	listener, err := fe.listenerFactory.ListenTCP("tcp", fe.listenAddr)
+	fe.listener = listener
+	fe.listenerMutex.Unlock()
+
 	if err != nil {
-		return nil, fmt.Errorf("can't listen on \"%s\" for frontend \"%s\": %q", conf.ListenAddr, conf.Name, err)
+		return fmt.Errorf("can't listen on \"%s\" for frontend \"%s\": %w", fe.listenAddr, fe.name, err)
 	}
 
-	frontend := &tcpFrontend{
-		name:          conf.Name,
-		isClosed:      false,
-		listenAddr:    parsedListenAddr,
-		listener:      listener,
-		targetBackend: targetBackend,
-	}
+	slog.Info("tcpfrontend started listening", slog.String("name", fe.name), slog.String("listenAddr", fe.listenAddr.String()))
 
-	go func() {
-		for {
-			connection, err := listener.Accept()
+	for {
+		//nolint:govet // shadowing "err" is fine
+		connection, err := listener.Accept()
 
-			if err != nil {
-				// Exit the loop if the listener is closed
-				if frontend.isClosed {
-					break
-				}
-
-				slog.Error("could not accept connection", slog.Any("error", err))
-				continue
+		if err != nil {
+			// Exit the loop if the listener doesn't exist anymore
+			fe.listenerMutex.RLock()
+			if fe.listener == nil {
+				fe.listenerMutex.RUnlock()
+				break
 			}
+			fe.listenerMutex.RUnlock()
 
-			targetBackend.Handle(connection)
+			slog.Error("could not accept connection", slog.Any("error", err))
+			continue
 		}
+
+		fe.targetBackend.Handle(connection)
+	}
+
+	return nil
+}
+
+// Close closes the listening instance if existing.
+func (fe *tcpFrontend) Close() error {
+	fe.listenerMutex.Lock()
+	defer func() {
+		fe.listener = nil
+		fe.listenerMutex.Unlock()
 	}()
 
-	slog.Info("frontend started listening", slog.String("name", conf.Name), slog.String("listenAddr", conf.ListenAddr))
-
-	return frontend, nil
-}
-
-func (frontend *tcpFrontend) GetName() string {
-	return frontend.name
-}
-
-func (frontend *tcpFrontend) Close() {
-	if frontend.isClosed {
-		return
+	if fe.listener == nil {
+		return nil
 	}
 
-	frontend.isClosed = true
-	frontend.listener.Close()
+	if err := fe.listener.Close(); err != nil {
+		return fmt.Errorf("tcpfrontend could not close listener: %w", err)
+	}
+
+	return nil
 }
