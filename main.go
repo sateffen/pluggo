@@ -63,16 +63,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	frontendList.ListenAll()
-
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	slog.Info("started successfully")
+	slog.Info("start listening")
 
-	<-signalChan
+	select {
+	case <-signalChan:
+		slog.Info("received exit signal, stopping...")
+		frontendList.CloseAll()
+	// error handling is done inside ListenAll, so logging and stuff. Here we just stop the process.
+	case <-frontendList.ListenAll():
+		frontendList.CloseAll()
+	}
 
-	slog.Info("received exit signal, stopping...")
-	frontendList.CloseAll()
 	os.Exit(0)
 }

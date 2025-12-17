@@ -33,7 +33,7 @@ func NewBackendList(conf config.BackendConfigs) (*BackendList, error) {
 	for _, wolForwarderConf := range conf.WoLForwarder {
 		wolForwarderBackend, err := newWoLForwarderBackend(wolForwarderConf)
 		if err != nil {
-			return nil, fmt.Errorf("could not create backend \"%s\": %w", wolForwarderConf.Name, err)
+			return nil, fmt.Errorf("could not create backend '%s': %w", wolForwarderConf.Name, err)
 		}
 
 		bl.list[wolForwarderConf.Name] = wolForwarderBackend

@@ -114,5 +114,5 @@ func (be *wolForwarderBackend) tryDial() (net.Conn, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("timeout while waiting for target with addr \"%s\"", be.targetAddr)
+	return nil, fmt.Errorf("timeout while waiting for target with addr '%s'", be.targetAddr)
 }

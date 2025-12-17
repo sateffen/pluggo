@@ -27,8 +27,7 @@ func NewFrontendList(conf config.FrontendConfigs, backendList *backends.BackendL
 	for _, tcpConf := range conf.TCP {
 		tcpFrontend, err := newTCPFrontend(tcpConf, backendList)
 		if err != nil {
-			fl.CloseAll()
-			return nil, fmt.Errorf("could not create frontend \"%s\": %w", tcpConf.Name, err)
+			return nil, fmt.Errorf("could not create frontend '%s': %w", tcpConf.Name, err)
 		}
 
 		fl.list[tcpConf.Name] = tcpFrontend
@@ -46,18 +45,22 @@ func (fl *FrontendList) Get(name string) (Frontend, bool) {
 }
 
 // ListenAll starts the listener for all Frontends. Each listen starts in its own go-routine.
-// If any listen fails, this will close all frontends.
-func (fl *FrontendList) ListenAll() {
+// If any frontend has issues while listening, the error will get written to the returned channel.
+func (fl *FrontendList) ListenAll() chan error {
+	errChan := make(chan error, len(fl.list))
+
 	for _, frontend := range fl.list {
 		go func(fe Frontend) {
 			err := fe.Listen()
 
 			if err != nil {
 				slog.Warn("tcpfrontend failed to listen", slog.String("name", fe.GetName()), slog.Any("error", err))
-				fl.CloseAll()
+				errChan <- err
 			}
 		}(frontend)
 	}
+
+	return errChan
 }
 
 // CloseAll closes all listening frontends and therefore stops all listening frontends.

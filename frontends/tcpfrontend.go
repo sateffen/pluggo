@@ -23,12 +23,12 @@ type tcpFrontend struct {
 func newTCPFrontend(conf config.TCPFrontendConfig, backendList *backends.BackendList) (*tcpFrontend, error) {
 	parsedListenAddr, err := net.ResolveTCPAddr("tcp", conf.ListenAddr)
 	if err != nil {
-		return nil, fmt.Errorf("could not parse listenAddr \"%s\" of frontend \"%s\": %w", conf.ListenAddr, conf.Name, err)
+		return nil, fmt.Errorf("could not parse listenAddr '%s' of frontend '%s': %w", conf.ListenAddr, conf.Name, err)
 	}
 
 	targetBackend, ok := backendList.Get(conf.Target)
 	if !ok {
-		return nil, fmt.Errorf("target backend \"%s\" for frontend \"%s\" does not exist", conf.Target, conf.Name)
+		return nil, fmt.Errorf("target backend '%s' for frontend '%s' does not exist", conf.Target, conf.Name)
 	}
 
 	return &tcpFrontend{
@@ -56,7 +56,7 @@ func (fe *tcpFrontend) Listen() error {
 	fe.listenerMutex.Unlock()
 
 	if err != nil {
-		return fmt.Errorf("can't listen on \"%s\" for frontend \"%s\": %w", fe.listenAddr, fe.name, err)
+		return fmt.Errorf("can't listen on '%s' for frontend '%s': %w", fe.listenAddr, fe.name, err)
 	}
 
 	slog.Info("tcpfrontend started listening", slog.String("name", fe.name), slog.String("listenAddr", fe.listenAddr.String()))
