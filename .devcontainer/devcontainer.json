@@ -1,0 +1,16 @@
+{
+    "name": "pluggo",
+    "dockerComposeFile": "docker-compose.yml",
+    "service": "app",
+    "workspaceFolder": "/workspace",
+    "postStartCommand": "/startup.sh",
+    "waitFor": "postStartCommand",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "golang.go",
+                "tamasfe.even-better-toml"
+            ]
+        }
+    }
+}

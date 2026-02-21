@@ -1,6 +1,7 @@
 .*
 !.gitignore
 !.golangci.yml
+!.devcontainer
 
 dist/
 vendor/
