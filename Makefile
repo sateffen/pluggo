@@ -52,11 +52,11 @@ help: Makefile
 $(DISTPATH)/$(PROJECTNAME): $(GOFILES) go.mod go.sum
 	@echo " > Building binary..."
 	@mkdir -p $(DISTPATH)
-	@go build -mod=vendor -ldflags '-s' -o ./$(DISTPATH)/$(PROJECTNAME) .
+	@go build -mod=vendor -buildmode=pie -trimpath -ldflags '-s' -o ./$(DISTPATH)/$(PROJECTNAME) .
 	@echo " > Done... available at $(DISTPATH)/$(PROJECTNAME)"
 
 $(DISTPATH)/$(PROJECTNAME).arm64: $(GOFILES) go.mod go.sum
 	@echo " > Building binary..."
 	@mkdir -p $(DISTPATH)
-	@GOARCH=arm64 go build -mod=vendor -ldflags '-s' -o ./$(DISTPATH)/$(PROJECTNAME).arm64 .
+	@GOARCH=arm64 go build -mod=vendor -buildmode=pie -trimpath -ldflags '-s' -o ./$(DISTPATH)/$(PROJECTNAME).arm64 .
 	@echo " > Done... available at $(DISTPATH)/$(PROJECTNAME).arm64"
