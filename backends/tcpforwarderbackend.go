@@ -36,6 +36,24 @@ func (be *tcpForwarderBackend) GetName() string {
 	return be.name
 }
 
+// Close closes all active connections managed by this tcpForwarderBackend instance.
+func (be *tcpForwarderBackend) Close() error {
+	be.connectionsMutex.Lock()
+	connections := make([]*helper.PipeHelper, 0, be.activeConnections.Len())
+	for e := be.activeConnections.Front(); e != nil; e = e.Next() {
+		if pipeHelper, ok := e.Value.(*helper.PipeHelper); ok {
+			connections = append(connections, pipeHelper)
+		}
+	}
+	be.connectionsMutex.Unlock()
+
+	for _, conn := range connections {
+		conn.Close()
+	}
+
+	return nil
+}
+
 // Handle handles given connection by trying to dial the target host. If the target host is reachable,
 // a pipe will get generated, else the connection gets closed.
 // Handle takes ownership of given connection.

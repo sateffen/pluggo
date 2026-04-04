@@ -312,6 +312,68 @@ func TestWoLForwarderBackend_Handle_SuccessfulConnection(t *testing.T) {
 	}
 }
 
+func TestWoLForwarderBackend_Close_ClosesActiveConnections(t *testing.T) {
+	targetBackendEnd, targetClientEnd := net.Pipe()
+	defer targetClientEnd.Close()
+
+	backend, err := newWoLForwarderBackend(config.WoLForwarderBackendConfig{
+		Name:             "test-wol",
+		TargetAddr:       "127.0.0.1:80",
+		WoLMACAddr:       "00:11:22:33:44:55",
+		WoLBroadcastAddr: "255.255.255.255:9",
+	})
+	if err != nil {
+		t.Fatalf("newWoLForwarderBackend() failed: %v", err)
+	}
+	backend.dialer = &mockDialer{
+		mockDialTimeout: func(_, _ string, _ time.Duration) (net.Conn, error) {
+			return targetBackendEnd, nil
+		},
+	}
+
+	incomingBackendConn, incomingTestConn := net.Pipe()
+	defer incomingTestConn.Close()
+
+	backend.Handle(incomingBackendConn)
+
+	if backend.activeConnections.Len() != 1 {
+		t.Fatalf("after Handle(), active connections = %d, want 1", backend.activeConnections.Len())
+	}
+
+	backend.Close()
+
+	// incomingTestConn should receive EOF because its peer was closed
+	readBuffer := make([]byte, 1)
+	n, err := incomingTestConn.Read(readBuffer)
+	if !errors.Is(err, io.EOF) {
+		t.Errorf("expected io.EOF after Close(), got: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("expected 0 bytes read after close, got %d", n)
+	}
+
+	// Give the OnClose callback time to remove the element from the list
+	time.Sleep(50 * time.Millisecond)
+
+	if backend.activeConnections.Len() != 0 {
+		t.Errorf("after Close(), active connections = %d, want 0", backend.activeConnections.Len())
+	}
+}
+
+func TestWoLForwarderBackend_Close_Empty(t *testing.T) {
+	backend, err := newWoLForwarderBackend(config.WoLForwarderBackendConfig{
+		Name:             "test-wol",
+		TargetAddr:       "127.0.0.1:80",
+		WoLMACAddr:       "00:11:22:33:44:55",
+		WoLBroadcastAddr: "255.255.255.255:9",
+	})
+	if err != nil {
+		t.Fatalf("newWoLForwarderBackend() failed: %v", err)
+	}
+	// Should not panic or deadlock with no active connections
+	backend.Close()
+}
+
 func TestWoLForwarderBackend_Handle_DialFailure(t *testing.T) {
 	mockDialer := &mockDialer{
 		mockDialTimeout: func(_, _ string, _ time.Duration) (net.Conn, error) {

@@ -1,6 +1,7 @@
 package backends
 
 import (
+	"errors"
 	"io"
 	"net"
 	"testing"
@@ -160,6 +161,44 @@ func TestEchoBackend_Handle_MultipleEchoRoundTrips(t *testing.T) {
 			t.Errorf("echo %d: got %q, want %q", i, string(readBuffer[:n]), testData)
 		}
 	}
+}
+
+func TestEchoBackend_Close_ClosesActiveConnections(t *testing.T) {
+	backend := newEchoBackend(config.EchoBackendConfig{Name: "test-echo"})
+
+	backendConn, testConn := net.Pipe()
+	defer testConn.Close()
+
+	backend.Handle(backendConn)
+
+	if backend.activeConnections.Len() != 1 {
+		t.Fatalf("after Handle(), active connections = %d, want 1", backend.activeConnections.Len())
+	}
+
+	backend.Close()
+
+	// testConn should receive EOF because its peer was closed
+	readBuffer := make([]byte, 1)
+	n, err := testConn.Read(readBuffer)
+	if !errors.Is(err, io.EOF) {
+		t.Errorf("expected io.EOF after Close(), got: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("expected 0 bytes read after close, got %d", n)
+	}
+
+	// Give the OnClose callback time to remove the element from the list
+	time.Sleep(50 * time.Millisecond)
+
+	if backend.activeConnections.Len() != 0 {
+		t.Errorf("after Close(), active connections = %d, want 0", backend.activeConnections.Len())
+	}
+}
+
+func TestEchoBackend_Close_Empty(_ *testing.T) {
+	backend := newEchoBackend(config.EchoBackendConfig{Name: "test-echo"})
+	// Should not panic or deadlock with no active connections
+	backend.Close()
 }
 
 func TestEchoBackend_Handle_ConcurrentConnections(t *testing.T) {

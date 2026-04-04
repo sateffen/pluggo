@@ -12,6 +12,12 @@ clean:
 	@echo " > Cleaning dist folder..."
 	@rm -r dist || true
 
+## test-all: Force run all tests in the project
+.PHONY: clean-testcache
+clean-testcache:
+	@echo " > Clearing test cache..."
+	@go clean -testcache
+
 ## lint: Run the linter on the project
 .PHONY: lint
 lint:
@@ -23,6 +29,10 @@ lint:
 test:
 	@echo " > Running tests..."
 	@go test -mod=vendor ./...
+
+## test-all: Force run all tests in the project
+.PHONY: test-all
+test-all: clean-testcache test
 
 ## build: Build the project
 .PHONY: build

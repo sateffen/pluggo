@@ -2,6 +2,7 @@ package backends
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 
 	"github.com/sateffen/pluggo/config"
@@ -10,6 +11,7 @@ import (
 type Backend interface {
 	GetName() string
 	Handle(connection net.Conn)
+	Close() error
 }
 
 type BackendList struct {
@@ -48,4 +50,13 @@ func (bl *BackendList) Get(name string) (Backend, bool) {
 	backend, ok := bl.list[name]
 
 	return backend, ok
+}
+
+// CloseAll closes all backends and therefore all active connections.
+func (bl *BackendList) CloseAll() {
+	for _, backend := range bl.list {
+		if err := backend.Close(); err != nil {
+			slog.Warn("couldn't close frontend properly", slog.String("name", backend.GetName()), slog.Any("error", err))
+		}
+	}
 }

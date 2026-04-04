@@ -503,11 +503,9 @@ func TestTCPFrontend_ConcurrentClose(t *testing.T) {
 	// Call Close concurrently from multiple goroutines
 	var wg sync.WaitGroup
 	for range 10 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			frontend.Close()
-		}()
+		})
 	}
 
 	wg.Wait()

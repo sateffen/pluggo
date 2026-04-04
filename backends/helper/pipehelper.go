@@ -68,6 +68,7 @@ func (ph *PipeHelper) OnClose(closeCallback func()) error {
 
 // Close closes this PipeHelper by closing all owned connections and calling the registered OnClose callback
 // if present.
+// Does NOT propagate errors back, but handle it locally.
 func (ph *PipeHelper) Close() {
 	ph.closeOnce.Do(func() {
 		ph.isClosed.Store(true)

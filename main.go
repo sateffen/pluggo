@@ -43,7 +43,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	slog.Info("Loading config", slog.String("configFilePath", configFilePath))
+	slog.Info("Loading config", slog.String("configFilePath", configFilePath)) //nolint:gosec // admin-controlled path, not user-injectable
 
 	conf, err := config.LoadConfig(configFilePath)
 	if err != nil {
@@ -72,9 +72,11 @@ func main() {
 	case <-signalChan:
 		slog.Info("received exit signal, stopping...")
 		frontendList.CloseAll()
+		backendList.CloseAll()
 	// error handling is done inside ListenAll, so logging and stuff. Here we just stop the process.
 	case <-frontendList.ListenAll():
 		frontendList.CloseAll()
+		backendList.CloseAll()
 	}
 
 	os.Exit(0)

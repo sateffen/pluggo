@@ -28,6 +28,24 @@ func (be *echoBackend) GetName() string {
 	return be.name
 }
 
+// Close closes all active connections managed by this echoBackend instance.
+func (be *echoBackend) Close() error {
+	be.connectionsMutex.Lock()
+	connections := make([]*helper.PipeHelper, 0, be.activeConnections.Len())
+	for e := be.activeConnections.Front(); e != nil; e = e.Next() {
+		if pipeHelper, ok := e.Value.(*helper.PipeHelper); ok {
+			connections = append(connections, pipeHelper)
+		}
+	}
+	be.connectionsMutex.Unlock()
+
+	for _, conn := range connections {
+		conn.Close()
+	}
+
+	return nil
+}
+
 // Handle handles given connection by writing all bytes read from it back to the connection itself.
 // Handle takes ownership of given connection.
 func (be *echoBackend) Handle(connection net.Conn) {
